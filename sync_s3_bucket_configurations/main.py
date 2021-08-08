@@ -5,7 +5,7 @@ import boto3
 import botocore
 
 def main():
-    help_flag, profile, region, action, buckets, json_file = parse_args()
+    help_flag, profile, region, action, buckets, json_file, config_types = parse_args()
     session = boto3_session(profile, region)
     s3_client = session.client("s3")
     s3_resource = session.resource("s3")
@@ -20,13 +20,13 @@ def main():
     if action == "get":
         properties = {}
         for bucket in buckets:
-            properties[bucket] = get_properties(s3_resource, bucket)
+            properties[bucket] = get_properties(s3_resource, bucket, config_types)
         print(json.dumps(properties, sort_keys=True, indent=4, ensure_ascii=False))
     elif action == "put":
         with open(json_file) as f:
             properties = json.load(f)
         for bucket, prop in properties.items():
-            put_properties(s3_resource, bucket, prop)
+            put_properties(s3_resource, bucket, prop, config_types)
 
 def parse_args():
     help_flag = False
@@ -35,6 +35,7 @@ def parse_args():
     action = None
     buckets = []
     json_file = None
+    config_types = []
     argCount = len(sys.argv)
     i = 1
     while i < argCount:
@@ -51,6 +52,10 @@ def parse_args():
                 raise Exception(f"{a} needs parameter")
             i += 1
             region = sys.argv[i]
+        elif a == "--lifecycle":
+            config_types.append("lifecycle")
+        elif a == "--tag":
+            config_types.append("tag")
         elif not action:
             if a == "get":
                 action = a
@@ -72,14 +77,21 @@ def parse_args():
     if action == "put" and not json_file:
         raise Exception(f"json file not specified")
 
-    return [help_flag, profile, region, action, buckets, json_file]
+    if len(config_types) == 0:
+        config_types = ["lifecycle", "tag"]
+
+    return [help_flag, profile, region, action, buckets, json_file, config_types]
 
 def output_help():
     print("""Tool to retrieve and update S3 configurations
 
-Usage
-    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] get [BUCKET_NAME]
-    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] put [JSON_FILE_PATH]
+Usage:
+    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] get [BUCKET_NAME...] [CONFIG_TYPES...]
+    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] put JSON_FILE_PATH [CONFIG_TYPES...]
+
+CONFIG_TYPES:
+    --lifecycle
+    --tag
 """)
 
 def boto3_session(profile, region):
@@ -93,18 +105,22 @@ def list_buckets(s3_client):
         result.append(elem['Name'])
     return result
 
-def get_properties(s3_resource, bucket):
-    prop = {
-        "lifecycle": get_lifecycle(s3_resource, bucket),
-        "tag": get_tag(s3_resource, bucket),
-    }
+def get_properties(s3_resource, bucket, config_types):
+    prop = {}
+    for c in config_types:
+        if c == "lifecycle":
+            prop[c] = get_lifecycle(s3_resource, bucket);
+        elif c == "tag":
+            prop[c] = get_tag(s3_resource, bucket);
     return prop
 
-def put_properties(s3_resource, bucket, prop):
-    if "lifecycle" in prop:
-        put_lifecycle(s3_resource, bucket, prop["lifecycle"])
-    if "tag" in prop:
-        put_tag(s3_resource, bucket, prop["tag"])
+def put_properties(s3_resource, bucket, prop, config_types):
+    for c in config_types:
+        if c in prop:
+            if c == "lifecycle":
+                put_lifecycle(s3_resource, bucket, prop[c])
+            if c == "tag":
+                put_tag(s3_resource, bucket, prop[c])
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
