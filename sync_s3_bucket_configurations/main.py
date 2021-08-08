@@ -94,12 +94,15 @@ def list_buckets(s3_client):
 def get_properties(s3_resource, bucket):
     prop = {
         "lifecycle": get_lifecycle(s3_resource, bucket),
+        "tag": get_tag(s3_resource, bucket),
     }
     return prop
 
 def put_properties(s3_resource, bucket, prop):
     if "lifecycle" in prop:
         put_lifecycle(s3_resource, bucket, prop["lifecycle"])
+    if "tag" in prop:
+        put_tag(s3_resource, bucket, prop["tag"])
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
@@ -126,6 +129,28 @@ def put_lifecycle(s3_resource, bucket, new_rules):
     bucket_lifecycle.put(
         LifecycleConfiguration = {
             'Rules': new_rules,
+        }
+    )
+
+def get_tag(s3_resource, bucket):
+    tagging = s3_resource.BucketTagging(bucket)
+    try:
+        tag_set = tagging.tag_set
+        return tag_set
+    except botocore.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchTagSet":
+            return []
+        raise
+
+def put_tag(s3_resource, bucket, new_tag_set):
+    curr_tag_set = get_tag(s3_resource, bucket)
+    if new_tag_set == curr_tag_set:
+        return
+    print(f"update {bucket}'s tag")
+    tagging = s3_resource.BucketTagging(bucket)
+    tagging.put(
+        Tagging = {
+            'TagSet': new_tag_set,
         }
     )
 
