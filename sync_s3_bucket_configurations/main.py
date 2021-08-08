@@ -77,7 +77,9 @@ def parse_args():
 def output_help():
     print("""Tool to retrieve and update S3 configurations
 
-sync-s3-bucket-configurations [--profile PROFILE_NAME] 
+Usage
+    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] get [BUCKET_NAME]
+    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] put [JSON_FILE_PATH]
 """)
 
 def boto3_session(profile, region):
