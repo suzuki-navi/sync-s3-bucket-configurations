@@ -1,0 +1,6 @@
+{
+    "BUCKET_NAME": {
+        "lifecycle": [],
+        "tag": []
+    }
+}
