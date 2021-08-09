@@ -20,7 +20,7 @@ def main():
     if action == "get":
         properties = {}
         for bucket in buckets:
-            properties[bucket] = get_properties(s3_resource, bucket, config_types)
+            properties[bucket] = get_properties(s3_client, s3_resource, bucket, config_types)
         print(json.dumps(properties, sort_keys=True, indent=4, ensure_ascii=False))
     elif action == "put":
         if not json_file and not sys.stdin.isatty():
@@ -31,7 +31,7 @@ def main():
             with open(json_file) as f:
                 properties = json.load(f)
         for bucket, prop in properties.items():
-            put_properties(s3_resource, bucket, prop, config_types)
+            put_properties(s3_client, s3_resource, bucket, prop, config_types)
 
 def parse_args():
     help_flag = False
@@ -63,6 +63,10 @@ def parse_args():
             config_types.append("tag")
         elif a == "--versioning":
             config_types.append("versioning")
+        elif a == "--metrics":
+            config_types.append("metrics")
+        elif a == "--analytics":
+            config_types.append("analytics")
         elif not action:
             if a == "get":
                 action = a
@@ -83,7 +87,7 @@ def parse_args():
         raise Exception(f"Action not specified")
 
     if len(config_types) == 0:
-        config_types = ["lifecycle", "tag", "versioning"]
+        config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics"]
 
     return [help_flag, profile, region, action, buckets, json_file, config_types]
 
@@ -98,6 +102,8 @@ CONFIG_TYPES:
     --lifecycle
     --tag
     --versioning
+    --metrics
+    --analytics
 """)
 
 def boto3_session(profile, region):
@@ -111,7 +117,7 @@ def list_buckets(s3_client):
         result.append(elem['Name'])
     return result
 
-def get_properties(s3_resource, bucket, config_types):
+def get_properties(s3_client, s3_resource, bucket, config_types):
     prop = {}
     for c in config_types:
         if c == "lifecycle":
@@ -120,9 +126,13 @@ def get_properties(s3_resource, bucket, config_types):
             prop[c] = get_tag(s3_resource, bucket);
         elif c == "versioning":
             prop[c] = get_versioning(s3_resource, bucket);
+        elif c == "metrics":
+            prop[c] = get_metrics(s3_client, bucket);
+        elif c == "analytics":
+            prop[c] = get_analytics(s3_client, bucket);
     return prop
 
-def put_properties(s3_resource, bucket, prop, config_types):
+def put_properties(s3_client, s3_resource, bucket, prop, config_types):
     for c in config_types:
         if c in prop:
             if c == "lifecycle":
@@ -131,6 +141,10 @@ def put_properties(s3_resource, bucket, prop, config_types):
                 put_tag(s3_resource, bucket, prop[c])
             if c == "versioning":
                 put_versioning(s3_resource, bucket, prop[c])
+            if c == "metrics":
+                put_metrics(s3_client, bucket, prop[c])
+            if c == "analytics":
+                put_analytics(s3_client, bucket, prop[c])
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
@@ -204,4 +218,90 @@ def put_versioning(s3_resource, bucket, new_config):
     handler.put(
         VersioningConfiguration = new_config,
     )
+
+def get_metrics(s3_client, bucket):
+    res = s3_client.list_bucket_metrics_configurations(
+        Bucket = bucket,
+    )
+    metrics = []
+    while True:
+        if 'MetricsConfigurationList' in res:
+            for elem in res['MetricsConfigurationList']:
+                metrics.append(elem)
+        if not 'ContinuationToken' in res:
+            break
+        res = s3_client.list_bucket_metrics_configurations(
+            Bucket = bucket,
+            ContinuationToken = res['ContinuationToken']
+        )
+    return metrics
+
+def put_metrics(s3_client, bucket, new_metrics):
+    curr_metrics = get_metrics(s3_client, bucket)
+    curr_metrics = configurations_to_dict(curr_metrics)
+    new_metrics = configurations_to_dict(new_metrics)
+    if new_metrics == curr_metrics:
+        return
+    print(f"update {bucket}'s metrics")
+    for id, elem in new_metrics.items():
+        if id in curr_metrics and elem == curr_metrics[id]:
+            continue
+        s3_client.put_bucket_metrics_configuration(
+            Bucket = bucket,
+            Id = id,
+            MetricsConfiguration = elem,
+        )
+    for id, elem in curr_metrics.items():
+        if id in new_metrics:
+            continue
+        s3_client.delete_bucket_metrics_configuration(
+            Bucket = bucket,
+            Id = id,
+        )
+
+def get_analytics(s3_client, bucket):
+    res = s3_client.list_bucket_analytics_configurations(
+        Bucket = bucket,
+    )
+    analytics = []
+    while True:
+        if 'AnalyticsConfigurationList' in res:
+            for elem in res['AnalyticsConfigurationList']:
+                analytics.append(elem)
+        if not 'ContinuationToken' in res:
+            break
+        res = s3_client.list_bucket_analytics_configurations(
+            Bucket = bucket,
+            ContinuationToken = res['ContinuationToken']
+        )
+    return analytics
+
+def put_analytics(s3_client, bucket, new_analytics):
+    curr_analytics = get_analytics(s3_client, bucket)
+    curr_analytics = configurations_to_dict(curr_analytics)
+    new_analytics = configurations_to_dict(new_analytics)
+    if new_analytics == curr_analytics:
+        return
+    print(f"update {bucket}'s analytics")
+    for id, elem in new_analytics.items():
+        if id in curr_analytics and elem == curr_analytics[id]:
+            continue
+        s3_client.put_bucket_analytics_configuration(
+            Bucket = bucket,
+            Id = id,
+            AnalyticsConfiguration = elem,
+        )
+    for id, elem in curr_analytics.items():
+        if id in new_analytics:
+            continue
+        s3_client.delete_bucket_analytics_configuration(
+            Bucket = bucket,
+            Id = id,
+        )
+
+def configurations_to_dict(config_arr):
+    result = {}
+    for elem in config_arr:
+        result[elem['Id']] = elem
+    return result
 
