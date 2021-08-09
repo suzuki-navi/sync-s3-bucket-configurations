@@ -23,8 +23,13 @@ def main():
             properties[bucket] = get_properties(s3_resource, bucket, config_types)
         print(json.dumps(properties, sort_keys=True, indent=4, ensure_ascii=False))
     elif action == "put":
-        with open(json_file) as f:
-            properties = json.load(f)
+        if not json_file and not sys.stdin.isatty():
+            properties = json.load(sys.stdin)
+        else:
+            if not json_file:
+                raise Exception(f"json file not specified")
+            with open(json_file) as f:
+                properties = json.load(f)
         for bucket, prop in properties.items():
             put_properties(s3_resource, bucket, prop, config_types)
 
@@ -76,8 +81,6 @@ def parse_args():
 
     if not action and not help_flag:
         raise Exception(f"Action not specified")
-    if action == "put" and not json_file:
-        raise Exception(f"json file not specified")
 
     if len(config_types) == 0:
         config_types = ["lifecycle", "tag", "versioning"]
