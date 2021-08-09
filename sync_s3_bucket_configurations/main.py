@@ -67,6 +67,8 @@ def parse_args():
             config_types.append("metrics")
         elif a == "--analytics":
             config_types.append("analytics")
+        elif a == "--inventory":
+            config_types.append("inventory")
         elif not action:
             if a == "get":
                 action = a
@@ -87,7 +89,7 @@ def parse_args():
         raise Exception(f"Action not specified")
 
     if len(config_types) == 0:
-        config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics"]
+        config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory"]
 
     return [help_flag, profile, region, action, buckets, json_file, config_types]
 
@@ -130,6 +132,8 @@ def get_properties(s3_client, s3_resource, bucket, config_types):
             prop[c] = get_metrics(s3_client, bucket);
         elif c == "analytics":
             prop[c] = get_analytics(s3_client, bucket);
+        elif c == "inventory":
+            prop[c] = get_inventory(s3_client, bucket);
     return prop
 
 def put_properties(s3_client, s3_resource, bucket, prop, config_types):
@@ -145,6 +149,8 @@ def put_properties(s3_client, s3_resource, bucket, prop, config_types):
                 put_metrics(s3_client, bucket, prop[c])
             if c == "analytics":
                 put_analytics(s3_client, bucket, prop[c])
+            if c == "inventory":
+                put_inventory(s3_client, bucket, prop[c])
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
@@ -295,6 +301,46 @@ def put_analytics(s3_client, bucket, new_analytics):
         if id in new_analytics:
             continue
         s3_client.delete_bucket_analytics_configuration(
+            Bucket = bucket,
+            Id = id,
+        )
+
+def get_inventory(s3_client, bucket):
+    res = s3_client.list_bucket_inventory_configurations(
+        Bucket = bucket,
+    )
+    inventory = []
+    while True:
+        if 'InventoryConfigurationList' in res:
+            for elem in res['InventoryConfigurationList']:
+                inventory.append(elem)
+        if not 'ContinuationToken' in res:
+            break
+        res = s3_client.list_bucket_inventory_configurations(
+            Bucket = bucket,
+            ContinuationToken = res['ContinuationToken']
+        )
+    return inventory
+
+def put_inventory(s3_client, bucket, new_inventory):
+    curr_inventory = get_inventory(s3_client, bucket)
+    curr_inventory = configurations_to_dict(curr_inventory)
+    new_inventory = configurations_to_dict(new_inventory)
+    if new_inventory == curr_inventory:
+        return
+    print(f"update {bucket}'s inventory")
+    for id, elem in new_inventory.items():
+        if id in curr_inventory and elem == curr_inventory[id]:
+            continue
+        s3_client.put_bucket_inventory_configuration(
+            Bucket = bucket,
+            Id = id,
+            InventoryConfiguration = elem,
+        )
+    for id, elem in curr_inventory.items():
+        if id in new_inventory:
+            continue
+        s3_client.delete_bucket_inventory_configuration(
             Bucket = bucket,
             Id = id,
         )
