@@ -56,6 +56,8 @@ def parse_args():
             config_types.append("lifecycle")
         elif a == "--tag":
             config_types.append("tag")
+        elif a == "--versioning":
+            config_types.append("versioning")
         elif not action:
             if a == "get":
                 action = a
@@ -78,7 +80,7 @@ def parse_args():
         raise Exception(f"json file not specified")
 
     if len(config_types) == 0:
-        config_types = ["lifecycle", "tag"]
+        config_types = ["lifecycle", "tag", "versioning"]
 
     return [help_flag, profile, region, action, buckets, json_file, config_types]
 
@@ -92,6 +94,7 @@ Usage:
 CONFIG_TYPES:
     --lifecycle
     --tag
+    --versioning
 """)
 
 def boto3_session(profile, region):
@@ -112,6 +115,8 @@ def get_properties(s3_resource, bucket, config_types):
             prop[c] = get_lifecycle(s3_resource, bucket);
         elif c == "tag":
             prop[c] = get_tag(s3_resource, bucket);
+        elif c == "versioning":
+            prop[c] = get_versioning(s3_resource, bucket);
     return prop
 
 def put_properties(s3_resource, bucket, prop, config_types):
@@ -121,6 +126,8 @@ def put_properties(s3_resource, bucket, prop, config_types):
                 put_lifecycle(s3_resource, bucket, prop[c])
             if c == "tag":
                 put_tag(s3_resource, bucket, prop[c])
+            if c == "versioning":
+                put_versioning(s3_resource, bucket, prop[c])
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
@@ -170,5 +177,28 @@ def put_tag(s3_resource, bucket, new_tag_set):
         Tagging = {
             'TagSet': new_tag_set,
         }
+    )
+
+def get_versioning(s3_resource, bucket):
+    handler = s3_resource.BucketVersioning(bucket)
+    mfa_delete = handler.mfa_delete
+    status = handler.status
+    if not mfa_delete:
+        mfa_delete = 'Disabled'
+    if not status:
+        status = 'Disabled'
+    return {
+        'MFADelete': mfa_delete,
+        'Status': status,
+    }
+
+def put_versioning(s3_resource, bucket, new_config):
+    curr_config = get_versioning(s3_resource, bucket)
+    if new_config == curr_config:
+        return
+    print(f"update {bucket}'s versioning")
+    handler = s3_resource.BucketVersioning(bucket)
+    handler.put(
+        VersioningConfiguration = new_config,
     )
 
