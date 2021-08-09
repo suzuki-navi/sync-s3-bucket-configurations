@@ -69,6 +69,8 @@ def parse_args():
             config_types.append("analytics")
         elif a == "--inventory":
             config_types.append("inventory")
+        elif a == "--logging":
+            config_types.append("logging")
         elif a == "--all":
             config_types.append("all")
         elif not action:
@@ -91,7 +93,7 @@ def parse_args():
         raise Exception(f"Action not specified")
 
     if len(config_types) == 0 and action == "get" or "all" in config_types:
-        config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory"]
+        config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory", "logging"]
 
     return [help_flag, profile, region, action, buckets, json_file, config_types]
 
@@ -109,6 +111,7 @@ CONFIG_TYPES:
     --metrics
     --analytics
     --inventory
+    --logging
     --all
 """)
 
@@ -138,23 +141,28 @@ def get_properties(s3_client, s3_resource, bucket, config_types):
             prop[c] = get_analytics(s3_client, bucket);
         elif c == "inventory":
             prop[c] = get_inventory(s3_client, bucket);
+        elif c == "logging":
+            prop[c] = get_logging(s3_client, bucket);
     return prop
 
 def put_properties(s3_client, s3_resource, bucket, prop, config_types):
     for c in config_types:
-        if c in prop:
-            if c == "lifecycle":
-                put_lifecycle(s3_resource, bucket, prop[c])
-            if c == "tag":
-                put_tag(s3_resource, bucket, prop[c])
-            if c == "versioning":
-                put_versioning(s3_resource, bucket, prop[c])
-            if c == "metrics":
-                put_metrics(s3_client, bucket, prop[c])
-            if c == "analytics":
-                put_analytics(s3_client, bucket, prop[c])
-            if c == "inventory":
-                put_inventory(s3_client, bucket, prop[c])
+        if not c in prop:
+            continue
+        if c == "lifecycle":
+            put_lifecycle(s3_resource, bucket, prop[c])
+        if c == "tag":
+            put_tag(s3_resource, bucket, prop[c])
+        if c == "versioning":
+            put_versioning(s3_resource, bucket, prop[c])
+        if c == "metrics":
+            put_metrics(s3_client, bucket, prop[c])
+        if c == "analytics":
+            put_analytics(s3_client, bucket, prop[c])
+        if c == "inventory":
+            put_inventory(s3_client, bucket, prop[c])
+        if c == "logging":
+            put_logging(s3_client, bucket, prop[c])
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
@@ -347,6 +355,33 @@ def put_inventory(s3_client, bucket, new_inventory):
         s3_client.delete_bucket_inventory_configuration(
             Bucket = bucket,
             Id = id,
+        )
+
+def get_logging(s3_client, bucket):
+    res = s3_client.get_bucket_logging(
+        Bucket = bucket,
+    )
+    if 'LoggingEnabled' in res:
+        return res['LoggingEnabled']
+    else:
+        return {}
+
+def put_logging(s3_client, bucket, new_config):
+    curr_config = get_logging(s3_client, bucket)
+    if new_config == curr_config:
+        return
+    print(f"update {bucket}'s analytics")
+    if new_config == {}:
+        s3_client.put_bucket_logging(
+            Bucket = bucket,
+            BucketLoggingStatus = {},
+        )
+    else:
+        s3_client.put_bucket_logging(
+            Bucket = bucket,
+            BucketLoggingStatus = {
+                'LoggingEnabled': new_config,
+            },
         )
 
 def configurations_to_dict(config_arr):
