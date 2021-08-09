@@ -69,6 +69,8 @@ def parse_args():
             config_types.append("analytics")
         elif a == "--inventory":
             config_types.append("inventory")
+        elif a == "--all":
+            config_types.append("all")
         elif not action:
             if a == "get":
                 action = a
@@ -88,7 +90,7 @@ def parse_args():
     if not action and not help_flag:
         raise Exception(f"Action not specified")
 
-    if len(config_types) == 0:
+    if len(config_types) == 0 and action == "get" or "all" in config_types:
         config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory"]
 
     return [help_flag, profile, region, action, buckets, json_file, config_types]
@@ -106,6 +108,8 @@ CONFIG_TYPES:
     --versioning
     --metrics
     --analytics
+    --inventory
+    --all
 """)
 
 def boto3_session(profile, region):
