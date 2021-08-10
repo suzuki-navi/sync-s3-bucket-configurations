@@ -89,8 +89,8 @@ def parse_args():
                 raise Exception("Unknown parameter: {a}")
         i += 1
 
-    if not action and not help_flag:
-        raise Exception(f"Action not specified")
+    if not action:
+        help_flag = True
 
     if len(config_types) == 0 and action == "get" or "all" in config_types:
         config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory", "logging"]
