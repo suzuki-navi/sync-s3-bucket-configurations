@@ -195,11 +195,11 @@ def put_lifecycle(s3_resource, bucket, new_rules):
 def get_tag(s3_resource, bucket):
     tagging = s3_resource.BucketTagging(bucket)
     try:
-        tag_set = tagging.tag_set
+        tag_set = tag_list_to_dict(tagging.tag_set)
         return tag_set
     except botocore.exceptions.ClientError as e:
         if e.response["Error"]["Code"] == "NoSuchTagSet":
-            return []
+            return {}
         raise
 
 def put_tag(s3_resource, bucket, new_tag_set):
@@ -210,7 +210,7 @@ def put_tag(s3_resource, bucket, new_tag_set):
     tagging = s3_resource.BucketTagging(bucket)
     tagging.put(
         Tagging = {
-            'TagSet': new_tag_set,
+            'TagSet': tag_dict_to_list(new_tag_set),
         }
     )
 
@@ -336,8 +336,8 @@ def get_inventory(s3_client, bucket):
 
 def put_inventory(s3_client, bucket, new_inventory):
     curr_inventory = get_inventory(s3_client, bucket)
-    curr_inventory = configurations_to_dict(curr_inventory)
-    new_inventory = configurations_to_dict(new_inventory)
+    curr_inventory = configurations_list_to_dict(curr_inventory)
+    new_inventory = configurations_list_to_dict(new_inventory)
     if new_inventory == curr_inventory:
         return
     print(f"update {bucket}'s inventory")
@@ -384,9 +384,25 @@ def put_logging(s3_client, bucket, new_config):
             },
         )
 
-def configurations_to_dict(config_arr):
+################################################################################
+# boto3から得られるJSONを扱いやすい形式に変換するツール
+################################################################################
+
+def configurations_list_to_dict(config_list):
     result = {}
-    for elem in config_arr:
+    for elem in config_list:
         result[elem['Id']] = elem
+    return result
+
+def tag_list_to_dict(tag_list):
+    result = {}
+    for elem in tag_list:
+        result[elem['Key']] = elem['Value']
+    return result
+
+def tag_dict_to_list(tag_dict):
+    result = []
+    for key, value in tag_dict.items():
+        result.append({'Key': key, 'Value': value})
     return result
 
