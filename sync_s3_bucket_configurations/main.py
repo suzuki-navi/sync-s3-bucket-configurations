@@ -30,6 +30,8 @@ def main():
                 raise Exception(f"json file not specified")
             with open(json_file) as f:
                 properties = json.load(f)
+        if dry_run:
+            print("dry run")
         for bucket, prop in properties.items():
             put_properties(s3_client, s3_resource, bucket, prop, config_types, dry_run)
 
@@ -152,8 +154,6 @@ def get_properties(s3_client, s3_resource, bucket, config_types):
     return prop
 
 def put_properties(s3_client, s3_resource, bucket, prop, config_types, dry_run):
-    if dry_run:
-        print("dry run")
     for c in config_types:
         if not c in prop:
             continue
