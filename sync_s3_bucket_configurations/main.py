@@ -92,6 +92,9 @@ def parse_args():
     if not action:
         help_flag = True
 
+    if len(config_types) == 0 and action == "put":
+        raise Exception("CONFIG_TYPES not specified")
+
     if len(config_types) == 0 and action == "get" or "all" in config_types:
         config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory", "logging"]
 
