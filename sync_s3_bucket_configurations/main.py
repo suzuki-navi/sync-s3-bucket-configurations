@@ -165,7 +165,7 @@ def put_properties(s3_client, s3_resource, bucket, prop, config_types):
             put_logging(s3_client, bucket, prop[c])
 
 def get_lifecycle(s3_resource, bucket):
-    bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
+    bucket_lifecycle = s3_resource.BucketLifecycleConfiguration(bucket)
     try:
         rules = bucket_lifecycle.rules
 
@@ -185,7 +185,7 @@ def put_lifecycle(s3_resource, bucket, new_rules):
     if new_rules == curr_rules:
         return
     print(f"update {bucket}'s lifecycle")
-    bucket_lifecycle = s3_resource.BucketLifecycle(bucket)
+    bucket_lifecycle = s3_resource.BucketLifecycleConfiguration(bucket)
     bucket_lifecycle.put(
         LifecycleConfiguration = {
             'Rules': new_rules,
