@@ -5,7 +5,7 @@ import boto3
 import botocore
 
 def main():
-    help_flag, profile, region, action, buckets, json_file, config_types = parse_args()
+    help_flag, profile, region, action, buckets, json_file, config_types, dry_run = parse_args()
     session = boto3_session(profile, region)
     s3_client = session.client("s3")
     s3_resource = session.resource("s3")
@@ -31,7 +31,7 @@ def main():
             with open(json_file) as f:
                 properties = json.load(f)
         for bucket, prop in properties.items():
-            put_properties(s3_client, s3_resource, bucket, prop, config_types)
+            put_properties(s3_client, s3_resource, bucket, prop, config_types, dry_run)
 
 def parse_args():
     help_flag = False
@@ -41,6 +41,7 @@ def parse_args():
     buckets = []
     json_file = None
     config_types = []
+    dry_run = False
     argCount = len(sys.argv)
     i = 1
     while i < argCount:
@@ -73,6 +74,8 @@ def parse_args():
             config_types.append("logging")
         elif a == "--all":
             config_types.append("all")
+        elif a == "--dry-run":
+            dry_run = True
         elif not action:
             if a == "get":
                 action = a
@@ -98,14 +101,14 @@ def parse_args():
     if len(config_types) == 0 and action == "get" or "all" in config_types:
         config_types = ["lifecycle", "tag", "versioning", "metrics", "analytics", "inventory", "logging"]
 
-    return [help_flag, profile, region, action, buckets, json_file, config_types]
+    return [help_flag, profile, region, action, buckets, json_file, config_types, dry_run]
 
 def output_help():
     print("""Tool to retrieve and update S3 configurations
 
 Usage:
     $ sync-s3-bucket-configurations [--profile PROFILE_NAME] get [BUCKET_NAME...] [CONFIG_TYPES...]
-    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] put JSON_FILE_PATH [CONFIG_TYPES...]
+    $ sync-s3-bucket-configurations [--profile PROFILE_NAME] put JSON_FILE_PATH [CONFIG_TYPES...] [--dry-run]
 
 CONFIG_TYPES:
     --lifecycle
@@ -148,24 +151,26 @@ def get_properties(s3_client, s3_resource, bucket, config_types):
             prop[c] = get_logging(s3_client, bucket);
     return prop
 
-def put_properties(s3_client, s3_resource, bucket, prop, config_types):
+def put_properties(s3_client, s3_resource, bucket, prop, config_types, dry_run):
+    if dry_run:
+        print("dry run")
     for c in config_types:
         if not c in prop:
             continue
         if c == "lifecycle":
-            put_lifecycle(s3_resource, bucket, prop[c])
+            put_lifecycle(s3_resource, bucket, prop[c], dry_run)
         if c == "tag":
-            put_tag(s3_resource, bucket, prop[c])
+            put_tag(s3_resource, bucket, prop[c], dry_run)
         if c == "versioning":
-            put_versioning(s3_resource, bucket, prop[c])
+            put_versioning(s3_resource, bucket, prop[c], dry_run)
         if c == "metrics":
-            put_metrics(s3_client, bucket, prop[c])
+            put_metrics(s3_client, bucket, prop[c], dry_run)
         if c == "analytics":
-            put_analytics(s3_client, bucket, prop[c])
+            put_analytics(s3_client, bucket, prop[c], dry_run)
         if c == "inventory":
-            put_inventory(s3_client, bucket, prop[c])
+            put_inventory(s3_client, bucket, prop[c], dry_run)
         if c == "logging":
-            put_logging(s3_client, bucket, prop[c])
+            put_logging(s3_client, bucket, prop[c], dry_run)
 
 def get_lifecycle(s3_resource, bucket):
     bucket_lifecycle = s3_resource.BucketLifecycleConfiguration(bucket)
@@ -183,11 +188,13 @@ def get_lifecycle(s3_resource, bucket):
             return []
         raise
 
-def put_lifecycle(s3_resource, bucket, new_rules):
+def put_lifecycle(s3_resource, bucket, new_rules, dry_run):
     curr_rules = get_lifecycle(s3_resource, bucket)
     if new_rules == curr_rules:
         return
     print(f"update {bucket}'s lifecycle")
+    if dry_run:
+        return
     bucket_lifecycle = s3_resource.BucketLifecycleConfiguration(bucket)
     bucket_lifecycle.put(
         LifecycleConfiguration = {
@@ -205,11 +212,13 @@ def get_tag(s3_resource, bucket):
             return {}
         raise
 
-def put_tag(s3_resource, bucket, new_tag_set):
+def put_tag(s3_resource, bucket, new_tag_set, dry_run):
     curr_tag_set = get_tag(s3_resource, bucket)
     if new_tag_set == curr_tag_set:
         return
     print(f"update {bucket}'s tag")
+    if dry_run:
+        return
     tagging = s3_resource.BucketTagging(bucket)
     tagging.put(
         Tagging = {
@@ -230,11 +239,13 @@ def get_versioning(s3_resource, bucket):
         'Status': status,
     }
 
-def put_versioning(s3_resource, bucket, new_config):
+def put_versioning(s3_resource, bucket, new_config, dry_run):
     curr_config = get_versioning(s3_resource, bucket)
     if new_config == curr_config:
         return
     print(f"update {bucket}'s versioning")
+    if dry_run:
+        return
     handler = s3_resource.BucketVersioning(bucket)
     handler.put(
         VersioningConfiguration = new_config,
@@ -257,13 +268,15 @@ def get_metrics(s3_client, bucket):
         )
     return metrics
 
-def put_metrics(s3_client, bucket, new_metrics):
+def put_metrics(s3_client, bucket, new_metrics, dry_run):
     curr_metrics = get_metrics(s3_client, bucket)
     curr_metrics = configurations_to_dict(curr_metrics)
     new_metrics = configurations_to_dict(new_metrics)
     if new_metrics == curr_metrics:
         return
     print(f"update {bucket}'s metrics")
+    if dry_run:
+        return
     for id, elem in new_metrics.items():
         if id in curr_metrics and elem == curr_metrics[id]:
             continue
@@ -297,13 +310,15 @@ def get_analytics(s3_client, bucket):
         )
     return analytics
 
-def put_analytics(s3_client, bucket, new_analytics):
+def put_analytics(s3_client, bucket, new_analytics, dry_run):
     curr_analytics = get_analytics(s3_client, bucket)
     curr_analytics = configurations_to_dict(curr_analytics)
     new_analytics = configurations_to_dict(new_analytics)
     if new_analytics == curr_analytics:
         return
     print(f"update {bucket}'s analytics")
+    if dry_run:
+        return
     for id, elem in new_analytics.items():
         if id in curr_analytics and elem == curr_analytics[id]:
             continue
@@ -337,13 +352,15 @@ def get_inventory(s3_client, bucket):
         )
     return inventory
 
-def put_inventory(s3_client, bucket, new_inventory):
+def put_inventory(s3_client, bucket, new_inventory, dry_run):
     curr_inventory = get_inventory(s3_client, bucket)
     curr_inventory = configurations_list_to_dict(curr_inventory)
     new_inventory = configurations_list_to_dict(new_inventory)
     if new_inventory == curr_inventory:
         return
     print(f"update {bucket}'s inventory")
+    if dry_run:
+        return
     for id, elem in new_inventory.items():
         if id in curr_inventory and elem == curr_inventory[id]:
             continue
@@ -369,11 +386,13 @@ def get_logging(s3_client, bucket):
     else:
         return {}
 
-def put_logging(s3_client, bucket, new_config):
+def put_logging(s3_client, bucket, new_config, dry_run):
     curr_config = get_logging(s3_client, bucket)
     if new_config == curr_config:
         return
     print(f"update {bucket}'s analytics")
+    if dry_run:
+        return
     if new_config == {}:
         s3_client.put_bucket_logging(
             Bucket = bucket,
