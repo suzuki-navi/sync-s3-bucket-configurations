@@ -270,8 +270,8 @@ def get_metrics(s3_client, bucket):
 
 def put_metrics(s3_client, bucket, new_metrics, dry_run):
     curr_metrics = get_metrics(s3_client, bucket)
-    curr_metrics = configurations_to_dict(curr_metrics)
-    new_metrics = configurations_to_dict(new_metrics)
+    curr_metrics = configurations_list_to_dict(curr_metrics)
+    new_metrics = configurations_list_to_dict(new_metrics)
     if new_metrics == curr_metrics:
         return
     print(f"update {bucket}'s metrics")
@@ -312,8 +312,8 @@ def get_analytics(s3_client, bucket):
 
 def put_analytics(s3_client, bucket, new_analytics, dry_run):
     curr_analytics = get_analytics(s3_client, bucket)
-    curr_analytics = configurations_to_dict(curr_analytics)
-    new_analytics = configurations_to_dict(new_analytics)
+    curr_analytics = configurations_list_to_dict(curr_analytics)
+    new_analytics = configurations_list_to_dict(new_analytics)
     if new_analytics == curr_analytics:
         return
     print(f"update {bucket}'s analytics")
